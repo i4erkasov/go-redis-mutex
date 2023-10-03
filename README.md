@@ -1,5 +1,6 @@
 # Go Redis Mutex
 
+[![build workflow](https://github.com/i4erkasov/go-redis-mutex/actions/workflows/build.yml/badge.svg)](https://github.com/i4erkasov/go-redis-mutex/actions)
 ![GoDoc](https://godoc.org/github.com/i4erkasov/go-redis-mutex?status.svg)
 ![GitHub last commit](https://img.shields.io/github/last-commit/i4erkasov/go-redis-mutex)
 
