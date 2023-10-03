@@ -7,18 +7,10 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-// RWMutex RWMutexer defines an interface for a distributed reader/writer mutex using Redis.
 type RWMutex interface {
-	// RLock acquires a read lock.
 	RLock(ctx context.Context) error
-
-	// RUnlock releases a read lock.
-	RUnlock(ctx context.Context) error
-
-	// Lock acquires a write lock.
+	RUnlock(ctx context.Context)
 	Lock(ctx context.Context) error
-
-	// Unlock releases a write lock.
 	Unlock(ctx context.Context) error
 }
 
@@ -30,6 +22,10 @@ type KeyDBRWMutex struct {
 	readCount string
 }
 
+// NewRWMutex initializes a new Redis-based reader-writer mutex.
+// The mutex separates the keys for read and write locks for granular control.
+// It uses a specific value for write locks to ensure that only the owner can unlock it,
+// while read locks increment a counter to manage multiple readers.
 func NewRWMutex(client *redis.Client, baseKey string, writeVal string) *KeyDBRWMutex {
 	return &KeyDBRWMutex{
 		client:    client,
@@ -40,6 +36,7 @@ func NewRWMutex(client *redis.Client, baseKey string, writeVal string) *KeyDBRWM
 	}
 }
 
+// RLock attempts to acquire a read lock, waiting if a write lock is held.
 func (m *KeyDBRWMutex) RLock(ctx context.Context) error {
 	for {
 		if locked, _ := m.isWriteLocked(ctx); locked {
@@ -53,17 +50,19 @@ func (m *KeyDBRWMutex) RLock(ctx context.Context) error {
 	return nil
 }
 
-func (m *KeyDBRWMutex) RUnlock(ctx context.Context) error {
+// RUnlock releases a read lock by decrementing the read count.
+func (m *KeyDBRWMutex) RUnlock(ctx context.Context) {
 	m.client.Decr(ctx, m.readCount)
-	return nil
 }
 
+// Lock attempts to acquire a write lock, waiting if there are readers or another writer.
 func (m *KeyDBRWMutex) Lock(ctx context.Context) error {
 	for {
 		set, err := m.client.SetNX(ctx, m.writeKey, m.writeVal, expiration).Result()
 		if err != nil {
 			return err
 		}
+
 		if set {
 			for {
 				// Wait for readers to finish
@@ -78,19 +77,26 @@ func (m *KeyDBRWMutex) Lock(ctx context.Context) error {
 	}
 }
 
+// Unlock releases a write lock, but only if the caller owns the lock.
 func (m *KeyDBRWMutex) Unlock(ctx context.Context) error {
 	val, err := m.client.Get(ctx, m.writeKey).Result()
+	// If the key doesn't exist, there's nothing to unlock
+	if err == redis.Nil {
+		return nil
+	}
+
 	if err != nil {
 		return err
 	}
+
 	if val != m.writeVal {
 		return ErrMutexOwnershipConflict
 	}
-	_, err = m.client.Del(ctx, m.writeKey).Result()
 
-	return err
+	return m.client.Del(ctx, m.writeKey).Err()
 }
 
+// isWriteLocked checks if a write lock is currently held.
 func (m *KeyDBRWMutex) isWriteLocked(ctx context.Context) (bool, error) {
 	val, err := m.client.Get(ctx, m.writeKey).Result()
 	if err == redis.Nil {

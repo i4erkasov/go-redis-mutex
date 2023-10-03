@@ -7,18 +7,17 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
+type Mutex interface {
+	Lock(ctx context.Context) error
+	Unlock(ctx context.Context) error
+	TryLock(ctx context.Context) (bool, error)
+}
+
 // KeyDBMutex provides a mutex mechanism using Redis.
 type KeyDBMutex struct {
 	client *redis.Client // The Redis client
 	key    string        // The key used to identify the mutex in Redis
 	value  string        // The value that represents the owner of the mutex
-}
-
-// Mutex is an interface for locking and unlocking mechanisms.
-type Mutex interface {
-	Lock(ctx context.Context) error
-	Unlock(ctx context.Context) error
-	TryLock(ctx context.Context) (bool, error)
 }
 
 // NewMutex initializes a new Redis-based mutex.
@@ -49,25 +48,31 @@ func (m *KeyDBMutex) Lock(ctx context.Context) error {
 
 // TryLock attempts to acquire the lock once. If successful, it returns true.
 func (m *KeyDBMutex) TryLock(ctx context.Context) (bool, error) {
-	set, err := m.client.SetNX(ctx, m.key, m.value, expiration).Result()
-	if err != nil {
-		return false, err
-	}
-	return set, nil
+	return m.client.SetNX(ctx, m.key, m.value, expiration).Result()
 }
 
-// Unlock releases the lock. If the lock is held by another value (i.e.,
-// acquired by another process or thread), it returns an error.
+// Unlock releases the lock. If the lock is held by another value
+// (i.e., acquired by another process or thread), it returns an error.
 func (m *KeyDBMutex) Unlock(ctx context.Context) error {
+	// Fetch the current value associated with the mutex key
 	val, err := m.client.Get(ctx, m.key).Result()
+	// If the key doesn't exist, there's nothing to unlock
+	if err == redis.Nil {
+		return nil
+	}
+
+	// For any other Redis error, return it
 	if err != nil {
 		return err
 	}
 
+	// Check if the current value matches our own mutex value
 	if val != m.value {
 		return ErrMutexOwnershipConflict
 	}
 
+	// If we own the mutex, delete the key to release the lock
 	_, err = m.client.Del(ctx, m.key).Result()
+
 	return err
 }

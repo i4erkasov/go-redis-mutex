@@ -1,10 +1,7 @@
 # Go Redis Mutex
 
-![GitHub issues](https://img.shields.io/github/issues/i4erkasov/go-redis-mutex)
-![GitHub stars](https://img.shields.io/github/stars/i4erkasov/go-redis-mutex)
-![GitHub forks](https://img.shields.io/github/forks/i4erkasov/go-redis-mutex)
-![GitHub last commit](https://img.shields.io/github/last-commit/i4erkasov/go-redis-mutex)
 ![GoDoc](https://godoc.org/github.com/i4erkasov/go-redis-mutex?status.svg)
+![GitHub last commit](https://img.shields.io/github/last-commit/i4erkasov/go-redis-mutex)
 
 
 `go-redis-mutex` is a Go package that offers an implementation of a distributed mutex based on Redis. This package provides both a standard mutex and a read/write mutex.
